@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shift Report Test</title>
+
+<style>
+body{
+  font-family: Arial;
+  background:#f4f6f8;
+  padding:20px;
+}
+
+.container{
+  max-width:500px;
+  margin:auto;
+  background:white;
+  padding:20px;
+  border-radius:10px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.1);
+}
+
+input, textarea{
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  margin-top:15px;
+  background:#2a4d69;
+  color:white;
+  border:none;
+  border-radius:6px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+button:hover{
+  background:#1e3a50;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>📋 Test Skiftrapport</h2>
+
+  <label>Maskin / Truck</label>
+  <input id="maskin" placeholder="t.ex TVS-01">
+
+  <label>Orsak (NOK)</label>
+  <textarea id="orsak" placeholder="Beskriv problemet"></textarea>
+
+  <button onclick="send()">Skicka</button>
+</div>
+
+<script>
+async function send(){
+  const data = {
+    datum: new Date().toISOString().split("T")[0],
+    skift: "Test",
+    avdelning: "Test",
+    maskin: document.getElementById("maskin").value,
+    orsak: document.getElementById("orsak").value,
+    atgard: ""
+  };
+
+  try {
+    await fetch("https://script.google.com/macros/s/AKfycbwXfcsKVrETqRSByVtdCJXcZKsPJaksg8_mVf4zpwVE_HbPAv6mjV8RU-zlFR2HhzJa/exec", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    });
+
+    alert("✅ Skickad!");
+  } catch(err){
+    alert("❌ Fel: " + err);
+    console.error(err);
+  }
+}
+</script>
+
+</body>
+</html>
