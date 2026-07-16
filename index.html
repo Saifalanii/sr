@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0A0E15">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
 <title>Ljudrum</title>
 <style>
   :root{
@@ -99,7 +100,7 @@
   #empty{
     position:absolute;left:50%;top:50%;
     transform:translate(-50%,76px);
-    width:min(280px, 78vw);
+    width:min(310px, 82vw);
     font-size:13px;line-height:1.55;color:var(--ink-dim);
     text-align:center;pointer-events:none;
     text-wrap:balance;
@@ -124,6 +125,7 @@
     box-shadow:0 4px 18px rgba(0,0,0,.45);
     touch-action:none;cursor:grab;
     animation:pop .45s cubic-bezier(.2,1.4,.4,1) both;
+    z-index:1;
   }
   @keyframes pop{
     0%{transform:scale(.2);opacity:0}
@@ -163,6 +165,33 @@
     .orb .ripples{display:none}
     .orb{animation:none}
   }
+
+  /* ---------- elevation rail ---------- */
+  .elevRail{
+    position:absolute;width:20px;height:58px;
+    margin:-29px 0 0 0;
+    pointer-events:none;
+    z-index:3;
+  }
+  .elevRail .track{
+    position:absolute;left:9px;top:0;bottom:0;width:2px;
+    border-radius:2px;
+    background:linear-gradient(to top, rgba(255,255,255,.05), rgba(var(--c),.35), rgba(255,255,255,.05));
+  }
+  .elevRail .knob{
+    position:absolute;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#0A0E15;border:2px solid rgba(var(--c),1);
+    box-shadow:0 0 0 3px #0A0E15, 0 0 10px rgba(var(--c),.55);
+    pointer-events:auto;cursor:grab;touch-action:none;
+    transition:box-shadow .2s;
+  }
+  /* invisible padding around the visual dot — 16px reads fine but is too
+     small to reliably grab, so the real hit area is larger than it looks */
+  .elevRail .knob::before{
+    content:"";position:absolute;inset:-12px;
+  }
+  .elevRail .knob:active{cursor:grabbing;box-shadow:0 0 14px rgba(var(--c),.7)}
+  .volRail .knob{background:#0F1420}
 
   /* ---------- controls + tray ---------- */
   #bottom{
@@ -213,6 +242,61 @@
     stroke-linecap:round;stroke-linejoin:round;
   }
   .chip:active{transform:scale(.9);background:rgba(255,255,255,.1)}
+
+  /* ---------- landscape: controls move to a right rail ---------- */
+  @media (orientation:landscape) and (max-height:620px){
+    body{flex-direction:row}
+    header{
+      position:absolute;z-index:5;
+      top:calc(env(safe-area-inset-top) + 2px);
+      left:env(safe-area-inset-left);right:230px;
+      padding:8px 16px;
+    }
+    #stage{order:1;flex:1}
+    #bottom{
+      order:2;flex:0 0 230px;
+      display:flex;flex-direction:column;
+      border-top:none;
+      border-left:1px solid rgba(255,255,255,.06);
+      padding-bottom:0;
+      padding-right:env(safe-area-inset-right);
+    }
+    #space{
+      flex-direction:column;align-items:stretch;gap:8px;
+      padding:calc(env(safe-area-inset-top) + 14px) 13px 0;
+    }
+    .seg{flex-direction:column;gap:3px}
+    #tray{
+      flex-direction:column;
+      overflow-y:auto;overflow-x:hidden;
+      padding:12px 13px 16px;gap:7px;
+    }
+    .chip{
+      flex-direction:row;align-items:center;justify-content:flex-start;
+      gap:11px;min-width:0;padding:10px 13px;
+    }
+    #empty{width:min(250px,52vw);transform:translate(-50%,68px)}
+  }
+
+  /* while gyro is on, ignore physical rotation — reflowing mid-tracking
+     would fight the whole point of turning your body/phone freely */
+  @media (orientation:landscape) and (max-height:620px){
+    body.gyro-lock{flex-direction:column}
+    body.gyro-lock header{
+      position:static;top:auto;left:auto;right:auto;padding:18px 22px 6px;
+    }
+    body.gyro-lock #stage{order:0;flex:1}
+    body.gyro-lock #bottom{
+      order:1;flex:0 0 auto;flex-direction:column;
+      border-top:1px solid rgba(255,255,255,.06);border-left:none;
+      padding-bottom:calc(18px + env(safe-area-inset-bottom));
+    }
+    body.gyro-lock #space{flex-direction:row;align-items:center;gap:10px;padding:12px 18px 0}
+    body.gyro-lock .seg{flex-direction:row}
+    body.gyro-lock #tray{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:12px 18px 16px;gap:8px}
+    body.gyro-lock .chip{flex-direction:column;padding:11px 10px 9px;min-width:66px}
+    body.gyro-lock #empty{width:min(280px,78vw);transform:translate(-50%,76px)}
+  }
 </style>
 </head>
 <body>
@@ -252,7 +336,7 @@
     </defs>
   </svg>
 
-  <div id="empty">Tap a sound below,<br>drag it where you want to hear it.<span class="gestures">Hold to orbit · double-tap to remove</span></div>
+  <div id="empty">Tap a sound below,<br>drag it where you want to hear it.<span class="gestures">Right dot = height · left dot = volume · hold to orbit · double-tap to remove</span></div>
 </div>
 
 <div id="bottom">
@@ -276,6 +360,11 @@ const ICONS = {
   waves:  '<path d="M3 9.5q2.5-3 5 0t5 0 5 0"/><path d="M3 15q2.5-3 5 0t5 0 5 0"/>',
   chimes: '<path d="M5 4.5h14"/><path d="M8.2 4.5V13"/><path d="M12 4.5v15"/><path d="M15.8 4.5V13"/>',
   drone:  '<circle cx="12" cy="12" r="3.2"/><path d="M12 4.5a7.5 7.5 0 0 1 7.5 7.5"/><path d="M12 19.5A7.5 7.5 0 0 1 4.5 12"/>',
+  thunder:'<path d="M13 3L6 13h5l-1.5 8L18 10h-5.5z"/>',
+  crickets:'<path d="M12 5v3M9 6.5l1.3 2.4M15 6.5L13.7 8.9"/><ellipse cx="12" cy="13" rx="4.5" ry="6"/><path d="M8 10.5L4 9M8 15L4 16.5M16 10.5l4-1.5M16 15l4 1.5"/>',
+  creek:  '<path d="M4 8q2.5 3 5 0t5 0 5 0"/><path d="M4 13.5q2.5 2.4 5 0t5 0 5 0"/><path d="M4 19q2.5 1.8 5 0t5 0 5 0"/>',
+  lofi:   '<circle cx="9" cy="16" r="2.6"/><circle cx="18" cy="14" r="2.6"/><path d="M11.6 16V6.5L20.6 5v9"/>',
+  cafe:   '<path d="M5 9h11v5a5.5 5.5 0 0 1-11 0z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 5.5c0 1-1.2 1-1.2 2s1.2 1 1.2 2M12 5.5c0 1-1.2 1-1.2 2s1.2 1 1.2 2"/>',
 };
 
 const SOUNDS = {
@@ -286,10 +375,15 @@ const SOUNDS = {
   waves:  {label:"Waves",  color:"77,215,224"},
   chimes: {label:"Chimes", color:"233,196,104"},
   drone:  {label:"Drone",  color:"192,140,255"},
+  thunder:{label:"Thunder",color:"148,163,220"},
+  crickets:{label:"Crickets",color:"168,214,113"},
+  creek:  {label:"Creek",  color:"120,206,198"},
+  lofi:   {label:"Lofi",   color:"235,150,190"},
+  cafe:   {label:"Café",   color:"210,178,130"},
 };
 
 let ctx = null, master = null, noiseBuf = null, paused = false;
-let convolver = null, wetGain = null, dryGain = null, preDelay = null, damp = null;
+let convolver = null, wetGain = null, dryGain = null, preDelay = null, damp = null, sendBus = null;
 
 function ensureCtx(){
   if(ctx){ if(ctx.state === "suspended" && !paused) ctx.resume(); return; }
@@ -301,8 +395,11 @@ function ensureCtx(){
   convolver.normalize = true;
   preDelay = ctx.createDelay(0.2); preDelay.delayTime.value = 0;
   damp = ctx.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 20000;
+  sendBus = ctx.createGain(); sendBus.gain.value = 1; // extra per-orb distance sends join here
   master.connect(dryGain).connect(ctx.destination);
-  master.connect(preDelay).connect(convolver).connect(damp).connect(wetGain).connect(ctx.destination);
+  master.connect(preDelay);
+  sendBus.connect(preDelay);
+  preDelay.connect(convolver).connect(damp).connect(wetGain).connect(ctx.destination);
 
   const len = ctx.sampleRate * 2;
   noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -364,6 +461,15 @@ function setSpace(name){
 }
 
 /* ============ generators ============ */
+
+let cafeBufferPromise = null;
+function loadCafeBuffer(){
+  if(cafeBufferPromise) return cafeBufferPromise;
+  cafeBufferPromise = fetch("cafe.mp3")
+    .then(r=>r.arrayBuffer())
+    .then(data=>ctx.decodeAudioData(data));
+  return cafeBufferPromise;
+}
 
 const GEN = {
   rain(out){
@@ -486,6 +592,150 @@ const GEN = {
     o1.start(); o2.start(); o3.start();
     return ()=>{ o1.stop(); o2.stop(); o3.stop(); };
   },
+
+  thunder(out){
+    // distant bed rumble, plus occasional rolling strikes
+    const n = noiseSource();
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=140;
+    const g = ctx.createGain(); g.gain.value=0.16;
+    n.connect(lp).connect(g).connect(out);
+    n.start();
+    let alive = true;
+    (function strike(){
+      if(!alive) return;
+      if(!paused){
+        const b = noiseSource(); b.loop = true;
+        const blp = ctx.createBiquadFilter(); blp.type="lowpass";
+        blp.frequency.value = 90 + Math.random()*60;
+        const bg = ctx.createGain();
+        const t = ctx.currentTime;
+        const dur = 1.4 + Math.random()*2.2;
+        bg.gain.setValueAtTime(0.0001, t);
+        bg.gain.exponentialRampToValueAtTime(0.55 + Math.random()*0.35, t + 0.05);
+        bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        // low rolling rumble via slow gain flutter
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 3 + Math.random()*4;
+        const lfoG = ctx.createGain(); lfoG.gain.value = 0.25;
+        lfo.connect(lfoG).connect(bg.gain);
+        b.connect(blp).connect(bg).connect(out);
+        b.start(t); lfo.start(t);
+        b.stop(t + dur + 0.1); lfo.stop(t + dur + 0.1);
+      }
+      setTimeout(strike, 5000 + Math.random()*14000);
+    })();
+    return ()=>{ alive=false; n.stop(); };
+  },
+
+  crickets(out){
+    let alive = true;
+    (function chirpTrain(){
+      if(!alive) return;
+      if(!paused){
+        const pulses = 3 + Math.floor(Math.random()*4);
+        const f = 3800 + Math.random()*900;
+        let t = ctx.currentTime + 0.02;
+        for(let i=0;i<pulses;i++){
+          const o = ctx.createOscillator(); o.type="square"; o.frequency.value = f;
+          const bp = ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=f; bp.Q.value=8;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(0.12, t+0.006);
+          g.gain.exponentialRampToValueAtTime(0.0001, t+0.045);
+          o.connect(bp).connect(g).connect(out);
+          o.start(t); o.stop(t+0.05);
+          t += 0.062;
+        }
+      }
+      setTimeout(chirpTrain, 550 + Math.random()*900);
+    })();
+    return ()=>{ alive=false; };
+  },
+
+  creek(out){
+    // continuous bright trickle bed + random bubble blips
+    const n = noiseSource();
+    const bp = ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1600; bp.Q.value=0.6;
+    const g = ctx.createGain(); g.gain.value=0.16;
+    n.connect(bp).connect(g).connect(out);
+    n.start();
+    let alive = true;
+    (function bubble(){
+      if(!alive) return;
+      if(!paused){
+        const b = noiseSource(); b.loop=false;
+        const bbp = ctx.createBiquadFilter(); bbp.type="bandpass";
+        bbp.frequency.value = 1200 + Math.random()*2600; bbp.Q.value=4;
+        const bg = ctx.createGain();
+        const t = ctx.currentTime;
+        bg.gain.setValueAtTime(0.0001, t);
+        bg.gain.exponentialRampToValueAtTime(0.18 + Math.random()*0.14, t+0.008);
+        bg.gain.exponentialRampToValueAtTime(0.0001, t+0.09+Math.random()*0.05);
+        b.connect(bbp).connect(bg).connect(out);
+        b.start(t); b.stop(t+0.18);
+      }
+      setTimeout(bubble, 45 + Math.random()*130);
+    })();
+    return ()=>{ alive=false; n.stop(); };
+  },
+
+  lofi(out){
+    // soft chord loop (Cmaj7 - Am7 - Fmaj7 - G7) + gentle vinyl crackle
+    const chords = [
+      [261.63, 329.63, 392.00, 493.88],   // Cmaj7
+      [220.00, 261.63, 329.63, 440.00],   // Am7
+      [174.61, 220.00, 261.63, 349.23],   // Fmaj7
+      [196.00, 246.94, 293.66, 349.23],   // G7
+    ];
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1400;
+    lp.connect(out);
+    let alive = true, chordIdx = 0;
+    (function bar(){
+      if(!alive) return;
+      if(!paused){
+        const t = ctx.currentTime + 0.05;
+        chords[chordIdx].forEach((f, i)=>{
+          const o = ctx.createOscillator(); o.type = i===0 ? "triangle" : "sine";
+          o.frequency.value = f * (i===0 ? 1 : 1); // root an octave down handled below
+          if(i===0) o.frequency.value = f/2;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(0.16/chords[chordIdx].length, t+0.6);
+          g.gain.exponentialRampToValueAtTime(0.0001, t+3.8);
+          o.connect(g).connect(lp);
+          o.start(t); o.stop(t+4);
+        });
+        chordIdx = (chordIdx+1) % chords.length;
+      }
+      setTimeout(bar, 4000);
+    })();
+    // gentle vinyl crackle
+    const n = noiseSource();
+    const hp = ctx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=3500;
+    const ng = ctx.createGain(); ng.gain.value=0.02;
+    n.connect(hp).connect(ng).connect(out);
+    n.start();
+    return ()=>{ alive=false; n.stop(); };
+  },
+
+  cafe(out){
+    // real field recording — synthesis can't fake speech texture, so this
+    // one loops an actual café recording through the same panner/reverb chain
+    let stopped = false, source = null;
+    const bed = ctx.createGain(); bed.gain.value = 0.9;
+    bed.connect(out);
+    loadCafeBuffer().then(buffer=>{
+      if(stopped) return;
+      source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(bed);
+      source.start();
+    }).catch(()=>{ /* file missing — orb stays silent rather than erroring */ });
+    return ()=>{
+      stopped = true;
+      if(source){ try{ source.stop(); }catch(e){} }
+    };
+  },
 };
 
 /* ============ stage ============ */
@@ -506,16 +756,19 @@ function stageCenter(){
   return {cx:r.width/2, cy:r.height/2, R:Math.min(r.width,r.height)/2 - 42};
 }
 
-function setPannerPos(panner, dx, dy, R){
+const VUNITS = 2.4; // vertical range mapped from elevation -1..1
+
+function setPannerPos(panner, dx, dy, elev, R){
   const x = (dx / R) * UNITS;
   const z = (dy / R) * UNITS;
+  const y = elev * VUNITS;
   const t = ctx.currentTime;
   if(panner.positionX){
     panner.positionX.setTargetAtTime(x, t, 0.03);
-    panner.positionY.setTargetAtTime(0, t, 0.03);
+    panner.positionY.setTargetAtTime(y, t, 0.03);
     panner.positionZ.setTargetAtTime(z, t, 0.03);
   } else {
-    panner.setPosition(x, 0, z);
+    panner.setPosition(x, y, z);
   }
 }
 
@@ -529,11 +782,18 @@ function addOrb(id){
   panner.refDistance = 1;
   panner.rolloffFactor = 1.15;
 
+  const airFilter = ctx.createBiquadFilter(); // air absorption — far sounds lose highs
+  airFilter.type = "lowpass";
+  airFilter.frequency.value = 20000;
+
+  const sendGain = ctx.createGain(); sendGain.gain.value = 0; // distance → extra reverb send
+
   const out = ctx.createGain(); out.gain.value = 1;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 256;
   out.connect(analyser);
-  out.connect(panner).connect(master);
+  out.connect(airFilter).connect(panner).connect(master);
+  out.connect(sendGain).connect(sendBus);
   const stop = GEN[id](out);
 
   const el = document.createElement("div");
@@ -550,11 +810,25 @@ function addOrb(id){
   beam.setAttribute("stroke-opacity","0");
   beams.appendChild(beam);
 
+  const rail = document.createElement("div");
+  rail.className = "elevRail";
+  rail.style.setProperty("--c", def.color);
+  rail.innerHTML = `<div class="track"></div><div class="knob"></div>`;
+  stage.appendChild(rail);
+  const knob = rail.querySelector(".knob");
+
+  const volRail = document.createElement("div");
+  volRail.className = "elevRail volRail";
+  volRail.style.setProperty("--c", def.color);
+  volRail.innerHTML = `<div class="track"></div><div class="knob"></div>`;
+  stage.appendChild(volRail);
+  const volKnob = volRail.querySelector(".knob");
+
   const {cx, cy, R} = stageCenter();
   const ang = Math.random()*Math.PI*2;
   const orb = {
-    el, panner, stop, out, beam, analyser,
-    buf:new Uint8Array(analyser.fftSize), amp:0,
+    el, panner, stop, out, beam, analyser, airFilter, sendGain, rail, knob, volRail, volKnob,
+    buf:new Uint8Array(analyser.fftSize), amp:0, elev:0, vol:1,
     x: cx + Math.cos(ang)*R*0.55,
     y: cy + Math.sin(ang)*R*0.55,
     orbit:false, orbAng:0, orbR:0, orbSpeed:0, path:null,
@@ -562,6 +836,49 @@ function addOrb(id){
   place(orb);
   orbs.add(orb);
   empty.style.opacity = 0;
+
+  /* elevation drag on the knob — independent of the orb's own drag */
+  const RAIL_H = 58;
+  knob.addEventListener("pointerdown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    knob.setPointerCapture(e.pointerId);
+    const onMove = ev=>{
+      const trackTop = orb.y - RAIL_H/2;
+      const frac = 1 - Math.min(1, Math.max(0, (ev.clientY - trackTop) / RAIL_H));
+      orb.elev = frac*2 - 1; // -1 (bottom) .. 1 (top)
+      updateOrbAudio(orb);
+      positionRail(orb);
+    };
+    const onUp = ()=>{
+      knob.removeEventListener("pointermove", onMove);
+      knob.removeEventListener("pointerup", onUp);
+      knob.removeEventListener("pointercancel", onUp);
+    };
+    knob.addEventListener("pointermove", onMove);
+    knob.addEventListener("pointerup", onUp);
+    knob.addEventListener("pointercancel", onUp);
+  });
+
+  /* volume drag — independent gain, on top of any distance-based rolloff */
+  volKnob.addEventListener("pointerdown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    volKnob.setPointerCapture(e.pointerId);
+    const onMove = ev=>{
+      const trackTop = orb.y - RAIL_H/2;
+      const frac = 1 - Math.min(1, Math.max(0, (ev.clientY - trackTop) / RAIL_H));
+      orb.vol = frac; // 0 (silent) .. 1 (full)
+      orb.out.gain.setTargetAtTime(orb.vol, ctx.currentTime, 0.05);
+      positionRail(orb);
+    };
+    const onUp = ()=>{
+      volKnob.removeEventListener("pointermove", onMove);
+      volKnob.removeEventListener("pointerup", onUp);
+      volKnob.removeEventListener("pointercancel", onUp);
+    };
+    volKnob.addEventListener("pointermove", onMove);
+    volKnob.addEventListener("pointerup", onUp);
+    volKnob.addEventListener("pointercancel", onUp);
+  });
 
   /* interactions: drag, double-tap remove, long-press orbit */
   let lastTap = 0, moved = false, lpTimer = null;
@@ -633,8 +950,8 @@ function updateOrbitPath(orb){
 function place(orb){
   orb.el.style.left = orb.x + "px";
   orb.el.style.top  = orb.y + "px";
-  const {cx, cy, R} = stageCenter();
-  setPannerPos(orb.panner, orb.x - cx, orb.y - cy, R);
+  updateOrbAudio(orb);
+  const {cx, cy} = stageCenter();
   const dx = cx - orb.x, dy = cy - orb.y;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx/len, uy = dy/len;
@@ -642,6 +959,30 @@ function place(orb){
   orb.beam.setAttribute("y1", orb.y + uy*32);
   orb.beam.setAttribute("x2", cx - ux*HEAD_R);
   orb.beam.setAttribute("y2", cy - uy*HEAD_R);
+  positionRail(orb);
+}
+
+/* pushes position + distance-derived audio params: HRTF coords, air-absorption
+   lowpass, and how much of this orb bleeds into the shared reverb send */
+function updateOrbAudio(orb){
+  const {cx, cy, R} = stageCenter();
+  const dist = Math.hypot(orb.x - cx, orb.y - cy);
+  const norm = Math.min(1, dist / R); // 0 = at head, 1 = stage edge
+  setPannerPos(orb.panner, orb.x - cx, orb.y - cy, orb.elev, R);
+  const t = ctx.currentTime;
+  orb.airFilter.frequency.setTargetAtTime(20000 - norm*15500, t, 0.08);
+  orb.sendGain.gain.setTargetAtTime(norm*0.55, t, 0.08);
+}
+
+function positionRail(orb){
+  orb.rail.style.left = (orb.x + 50) + "px";
+  orb.rail.style.top  = orb.y + "px";
+  const pct = (orb.elev + 1) / 2; // 0 bottom .. 1 top
+  orb.knob.style.bottom = `calc(${(pct*100).toFixed(1)}% - 5px)`;
+
+  orb.volRail.style.left = (orb.x - 50) + "px";
+  orb.volRail.style.top  = orb.y + "px";
+  orb.volKnob.style.bottom = `calc(${(orb.vol*100).toFixed(1)}% - 5px)`;
 }
 
 function removeOrb(orb){
@@ -652,9 +993,13 @@ function removeOrb(orb){
   orb.el.style.transform = "scale(.35)";
   orb.el.style.opacity = "0";
   orb.beam.setAttribute("stroke-opacity","0");
+  orb.rail.style.transition = "opacity .25s";
+  orb.rail.style.opacity = "0";
+  orb.volRail.style.transition = "opacity .25s";
+  orb.volRail.style.opacity = "0";
   setTimeout(()=>{
     try{orb.stop();}catch(e){}
-    orb.el.remove(); orb.beam.remove();
+    orb.el.remove(); orb.beam.remove(); orb.rail.remove(); orb.volRail.remove();
   }, 300);
   orbs.delete(orb);
   if(orbs.size === 0) empty.style.opacity = 1;
@@ -723,6 +1068,7 @@ async function toggleGyro(){
     removeEventListener("deviceorientation", onOrient);
     gyroOn = false; gyroBase = null;
     headEl.style.setProperty("--rot","0deg");
+    document.body.classList.remove("gyro-lock");
     if(ctx){
       const L = ctx.listener, t = ctx.currentTime;
       if(L.forwardX){ L.forwardX.setTargetAtTime(0,t,.05); L.forwardZ.setTargetAtTime(-1,t,.05); }
@@ -740,6 +1086,7 @@ async function toggleGyro(){
     }
     addEventListener("deviceorientation", onOrient);
     gyroOn = true; gyroBase = null;
+    document.body.classList.add("gyro-lock");
     gyroBtn.classList.add("on");
     hintEl.textContent = "turn your phone to turn the head";
   }catch(err){
@@ -747,6 +1094,15 @@ async function toggleGyro(){
     setTimeout(()=>{ hintEl.textContent = "🎧 headphones required"; }, 2500);
   }
 }
+
+/* ============ orientation ============ */
+/* Works on Android/Chromium in standalone. iOS has no Fullscreen API on
+   iPhone, so lock() is unavailable there — the landscape CSS covers it. */
+try{
+  if(screen.orientation && screen.orientation.lock){
+    screen.orientation.lock("portrait").catch(()=>{});
+  }
+}catch(e){/* unsupported — fall back to the landscape layout */}
 
 /* ============ dial ============ */
 function drawDial(){
