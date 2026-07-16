@@ -1,128 +1,799 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Skiftrapport App</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0A0E15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ljudrum</title>
 <style>
-body {
-  font-family: Arial;
-  background: #f4f6f8;
-  padding: 20px;
-}
-.container {
-  max-width: 500px;
-  margin: auto;
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-input, textarea, select {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  box-sizing: border-box;
-}
-button {
-  width: 100%;
-  padding: 12px;
-  margin-top: 15px;
-  background: #2a4d69;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  cursor: pointer;
-}
-button:hover {
-  background: #1e3a50;
-}
-label {
-  font-weight: bold;
-  margin-top: 12px;
-  display: block;
-}
+  :root{
+    --bg:#0A0E15;
+    --ink:#EDF1F8;
+    --ink-dim:#79839A;
+    --line:rgba(150,180,255,.09);
+    --line-strong:rgba(160,190,255,.22);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:
+      radial-gradient(90% 55% at 50% 0%, rgba(90,120,200,.10), transparent 70%),
+      radial-gradient(130% 100% at 50% 45%, #0F1522 0%, var(--bg) 62%);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;
+    user-select:none;-webkit-user-select:none;
+    padding-top:env(safe-area-inset-top);
+  }
+  /* room ambience — widens with the selected space */
+  #stage::before{
+    content:"";position:absolute;left:50%;top:50%;
+    width:calc(80% + var(--room,0)*70%);
+    aspect-ratio:1;transform:translate(-50%,-50%);
+    border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle, rgba(120,155,235,.14), transparent 65%);
+    opacity:var(--room,0);
+    transition:width .8s cubic-bezier(.3,.8,.3,1), opacity .8s ease;
+  }
+
+  header{
+    padding:18px 22px 6px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px}
+  h1{font-size:21px;font-weight:700;letter-spacing:-0.025em}
+  .hint{font-size:11px;color:var(--ink-dim);letter-spacing:.12em;text-transform:uppercase}
+  .hbtns{display:flex;gap:10px}
+  .hbtn{
+    width:40px;height:40px;border-radius:50%;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.09);
+    color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    transition:transform .12s, background .2s, border-color .2s, color .2s;
+  }
+  .hbtn:active{transform:scale(.9)}
+  .hbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .hbtn.on{background:rgba(120,160,255,.18);border-color:rgba(140,175,255,.5);color:#BCD0FF}
+
+  /* ---------- stage ---------- */
+  #stage{position:relative;flex:1;touch-action:none;overflow:hidden}
+  #dial, #beams{position:absolute;inset:0;pointer-events:none}
+  #dial circle{fill:none;stroke:var(--line);stroke-width:1}
+  #dial line.tick{stroke:var(--line);stroke-width:1}
+  #dial line.tick.cardinal{stroke:var(--line-strong)}
+  #dial text{
+    fill:var(--ink-dim);font-size:9px;letter-spacing:.28em;
+    font-family:inherit;text-anchor:middle;
+  }
+  #beams line{stroke-width:1.2;stroke-linecap:round}
+  #beams circle.orbit{fill:none;stroke-width:1;stroke-dasharray:3 7;stroke-linecap:round}
+
+  #halo{
+    position:absolute;left:50%;top:50%;width:190px;height:190px;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle, rgba(150,180,255,.30), transparent 62%);
+    border-radius:50%;pointer-events:none;
+    opacity:calc(.18 + var(--hamp,0)*.8);
+    transition:opacity .12s linear;
+  }
+  #head{
+    position:absolute;left:50%;top:50%;
+    width:78px;height:78px;
+    transform:translate(-50%,-50%) rotate(var(--rot,0deg));
+    pointer-events:none;
+    transition:transform .08s linear;
+  }
+
+  #empty{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,76px);
+    font-size:13px;line-height:1.5;color:var(--ink-dim);
+    text-align:center;pointer-events:none;
+    transition:opacity .5s;
+  }
+
+  /* ---------- orbs ---------- */
+  .orb{
+    position:absolute;width:60px;height:60px;margin:-30px 0 0 -30px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
+      radial-gradient(circle at 50% 65%, rgba(var(--c),.20), rgba(0,0,0,0) 70%),
+      #141B2B;
+    border:1px solid rgba(var(--c),.65);
+    box-shadow:0 4px 18px rgba(0,0,0,.45);
+    touch-action:none;cursor:grab;
+    animation:pop .45s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  @keyframes pop{
+    0%{transform:scale(.2);opacity:0}
+    100%{transform:scale(1);opacity:1}
+  }
+  .orb.engage{animation:engage .4s ease}
+  @keyframes engage{
+    0%,100%{transform:scale(1)}
+    45%{transform:scale(1.18)}
+  }
+  .orb:active{cursor:grabbing}
+  .orb svg{
+    width:24px;height:24px;position:relative;z-index:2;
+    fill:none;stroke:#fff;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;
+    opacity:.92;
+  }
+  .orb .core{
+    position:absolute;inset:6px;border-radius:50%;
+    background:radial-gradient(circle, rgba(var(--c),.85), rgba(var(--c),0) 70%);
+    opacity:calc(.22 + var(--amp,0)*.85);
+    transform:scale(calc(.9 + var(--amp,0)*.35));
+    filter:blur(2px);
+  }
+  .orb .ripples{position:absolute;inset:0;opacity:calc(.25 + var(--amp,0)*.9)}
+  .orb .ripples i{
+    position:absolute;inset:-1px;border-radius:50%;
+    border:1.5px solid rgba(var(--c),.7);
+    animation:ripple 2.8s cubic-bezier(.2,.6,.35,1) infinite;
+  }
+  .orb .ripples i:nth-child(2){animation-delay:1.4s}
+  @keyframes ripple{
+    0%{transform:scale(1);opacity:.6}
+    100%{transform:scale(2.9);opacity:0}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .orb .ripples{display:none}
+    .orb{animation:none}
+  }
+
+  /* ---------- controls + tray ---------- */
+  #bottom{
+    background:linear-gradient(to top, rgba(15,20,32,.92), rgba(15,20,32,.55));
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border-top:1px solid rgba(255,255,255,.06);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #space{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 18px 0;
+  }
+  #space .lbl{
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-dim);flex:0 0 auto;
+  }
+  .seg{
+    display:flex;flex:1;gap:2px;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:12px;padding:3px;
+  }
+  .seg button{
+    flex:1;border:none;border-radius:9px;padding:7px 0;
+    background:transparent;color:var(--ink-dim);
+    font-size:11.5px;font-weight:500;font-family:inherit;
+    cursor:pointer;transition:background .2s, color .2s;
+  }
+  .seg button.on{background:rgba(140,175,255,.20);color:#DCE7FF}
+
+  #tray{
+    display:flex;gap:8px;overflow-x:auto;
+    padding:12px 18px 16px;
+    scrollbar-width:none;
+  }
+  #tray::-webkit-scrollbar{display:none}
+  .chip{
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
+    min-width:66px;padding:11px 10px 9px;border-radius:18px;
+    background:rgba(255,255,255,.045);
+    border:1px solid rgba(255,255,255,.07);
+    color:var(--ink);font-size:10.5px;font-weight:500;letter-spacing:.04em;
+    cursor:pointer;transition:transform .12s, background .2s;
+  }
+  .chip svg{
+    width:22px;height:22px;fill:none;
+    stroke:rgb(var(--c));stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+  .chip:active{transform:scale(.9);background:rgba(255,255,255,.1)}
 </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>📋 Skiftrapport</h2>
+<header>
+  <div class="brand">
+    <h1>Ljudrum</h1>
+    <span class="hint" id="hint">🎧 headphones required</span>
+  </div>
+  <div class="hbtns">
+    <button class="hbtn" id="gyroBtn" aria-label="Gyro mode">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15 9l-1.6 4.4L9 15l1.6-4.4z"/></svg>
+    </button>
+    <button class="hbtn" id="pauseBtn" aria-label="Pause all">
+      <svg viewBox="0 0 24 24" id="pauseIcon"><path d="M9 6v12M15 6v12" stroke-width="2.4"/></svg>
+    </button>
+  </div>
+</header>
 
-  <label>Datum</label>
-  <input type="date" id="datum">
+<div id="stage">
+  <svg id="dial" width="100%" height="100%"></svg>
+  <svg id="beams" width="100%" height="100%"></svg>
+  <div id="halo"></div>
 
-  <label>Avdelning</label>
-  <select id="avdelning">
-    <option value="">Välj</option>
-    <option>TVS</option>
-    <option>TPB</option>
-  </select>
+  <svg id="head" viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M50 5 L59 21 L41 21 Z" fill="#C6D2EC"/>
+    <ellipse cx="17" cy="53" rx="7" ry="13" fill="#1E2A44"/>
+    <ellipse cx="83" cy="53" rx="7" ry="13" fill="#1E2A44"/>
+    <circle cx="50" cy="53" r="34" fill="#2B3C60"/>
+    <circle cx="50" cy="53" r="34" fill="url(#hg)"/>
+    <circle cx="50" cy="53" r="34" fill="none" stroke="rgba(200,215,255,.28)" stroke-width="1"/>
+    <defs>
+      <radialGradient id="hg" cx=".36" cy=".30" r="1.05">
+        <stop offset="0" stop-color="rgba(255,255,255,.30)"/>
+        <stop offset=".7" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+  </svg>
 
-  <label>Maskin / Truck</label>
-  <input id="maskin" placeholder="t.ex. TVS-01">
+  <div id="empty">Tap a sound below,<br>drag it where you want to hear it.<br><span style="font-size:11px;opacity:.7">Hold an orb to set it orbiting · double-tap to remove</span></div>
+</div>
 
-  <label>Orsak (NOK)</label>
-  <textarea id="orsak" placeholder="Beskriv problemet"></textarea>
-
-  <label>Åtgärd</label>
-  <textarea id="atgard" placeholder="Beskriv åtgärd"></textarea>
-
-  <button onclick="sendReport()">Skicka</button>
-  <button type="button" onclick="clearForm()" style="background:#888;">Börja om</button>
+<div id="bottom">
+  <div id="space">
+    <span class="lbl">Space</span>
+    <div class="seg" id="spaceSeg"></div>
+  </div>
+  <div id="tray"></div>
 </div>
 
 <script>
-datum.valueAsDate = new Date(); // default to today
+"use strict";
 
-async function sendReport() {
-  const data = {
-    datum: document.getElementById("datum").value,
-    skift: "Test", // You can calculate shift dynamically
-    avdelning: document.getElementById("avdelning").value,
-    maskin: document.getElementById("maskin").value,
-    orsak: document.getElementById("orsak").value,
-    atgard: document.getElementById("atgard").value
+/* ============ sound + icon definitions ============ */
+
+const ICONS = {
+  rain:   '<path d="M6.5 11a4 4 0 0 1 .4-8 5 5 0 0 1 9.7 1.3A3.4 3.4 0 0 1 16.2 11z"/><path d="M8 14.5l-1.2 3.5M12 14.5l-1.2 3.5M16 14.5l-1.2 3.5"/>',
+  fire:   '<path d="M12 3c1.2 3.2-3.2 4.8-3.2 8.4a3.7 3.7 0 0 0 7.4 0c0-1.6-.8-2.8-1.6-3.8-.4 1.1-.9 1.6-1.6 1.9.4-2.2-.2-4.6-1-6.5z"/>',
+  birds:  '<path d="M3.5 11q3-4.2 6.2 0"/><path d="M13.5 8q3-4.2 6.2 0"/><path d="M9 16.5q2.4-3.4 5 0"/>',
+  wind:   '<path d="M3 8h9.2a2.4 2.4 0 1 0-2.3-3"/><path d="M3 12.5h13.5a2.4 2.4 0 1 1-2.3 3"/><path d="M3 17h6.5"/>',
+  waves:  '<path d="M3 9.5q2.5-3 5 0t5 0 5 0"/><path d="M3 15q2.5-3 5 0t5 0 5 0"/>',
+  chimes: '<path d="M5 4.5h14"/><path d="M8.2 4.5V13"/><path d="M12 4.5v15"/><path d="M15.8 4.5V13"/>',
+  drone:  '<circle cx="12" cy="12" r="3.2"/><path d="M12 4.5a7.5 7.5 0 0 1 7.5 7.5"/><path d="M12 19.5A7.5 7.5 0 0 1 4.5 12"/>',
+};
+
+const SOUNDS = {
+  rain:   {label:"Rain",   color:"95,168,255"},
+  fire:   {label:"Fire",   color:"255,157,77"},
+  birds:  {label:"Birds",  color:"111,227,155"},
+  wind:   {label:"Wind",   color:"176,188,212"},
+  waves:  {label:"Waves",  color:"77,215,224"},
+  chimes: {label:"Chimes", color:"233,196,104"},
+  drone:  {label:"Drone",  color:"192,140,255"},
+};
+
+let ctx = null, master = null, noiseBuf = null, paused = false;
+let convolver = null, wetGain = null, dryGain = null, preDelay = null, damp = null;
+
+function ensureCtx(){
+  if(ctx){ if(ctx.state === "suspended" && !paused) ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  master = ctx.createGain(); master.gain.value = 0.9;
+  dryGain = ctx.createGain(); dryGain.gain.value = 1;
+  wetGain = ctx.createGain(); wetGain.gain.value = 0;
+  convolver = ctx.createConvolver();
+  convolver.normalize = true;
+  preDelay = ctx.createDelay(0.2); preDelay.delayTime.value = 0;
+  damp = ctx.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 20000;
+  master.connect(dryGain).connect(ctx.destination);
+  master.connect(preDelay).connect(convolver).connect(damp).connect(wetGain).connect(ctx.destination);
+
+  const len = ctx.sampleRate * 2;
+  noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  requestAnimationFrame(loop);
+}
+
+function noiseSource(){
+  const s = ctx.createBufferSource();
+  s.buffer = noiseBuf; s.loop = true;
+  return s;
+}
+
+/* ============ reverb spaces ============ */
+
+function makeIR(seconds, decay){
+  const rate = ctx.sampleRate, len = Math.floor(rate*seconds);
+  const buf = ctx.createBuffer(2, len, rate);
+  for(let c=0;c<2;c++){
+    const d = buf.getChannelData(c);
+    for(let i=0;i<len;i++){
+      const t = i/len;
+      d[i] = (Math.random()*2-1) * Math.pow(1 - t, decay);
+    }
+    // early reflections — a few discrete taps give the space a size
+    const taps = [0.011, 0.019, 0.031, 0.047, 0.068];
+    taps.forEach((tap, k)=>{
+      const idx = Math.floor(rate * tap * (1 + c*0.13) * seconds);
+      if(idx < len) d[idx] += (k % 2 ? -1 : 1) * 0.7 / (k+1);
+    });
+  }
+  return buf;
+}
+
+const SPACES = {
+  Dry:       {wet:0,    dry:1,    damp:20000, pre:0},
+  Room:      {wet:0.55, dry:0.85, damp:3200,  secs:0.55, decay:3.4, pre:0.006},
+  Hall:      {wet:0.95, dry:0.62, damp:2400,  secs:2.1,  decay:2.4, pre:0.022},
+  Cathedral: {wet:1.35, dry:0.42, damp:1600,  secs:4.5,  decay:1.7, pre:0.045},
+};
+const irCache = {};
+
+function setSpace(name){
+  ensureCtx();
+  const s = SPACES[name];
+  if(s.wet > 0){
+    if(!irCache[name]) irCache[name] = makeIR(s.secs, s.decay);
+    convolver.buffer = irCache[name];
+  }
+  const t = ctx.currentTime;
+  preDelay.delayTime.setTargetAtTime(s.pre, t, 0.05);
+  damp.frequency.setTargetAtTime(s.damp, t, 0.1);
+  wetGain.gain.setTargetAtTime(s.wet, t, 0.12);
+  dryGain.gain.setTargetAtTime(s.dry, t, 0.12);
+  document.body.style.setProperty("--room", (s.wet/1.35).toFixed(2));
+  document.querySelectorAll("#spaceSeg button").forEach(b=>
+    b.classList.toggle("on", b.dataset.name === name));
+}
+
+/* ============ generators ============ */
+
+const GEN = {
+  rain(out){
+    const n = noiseSource();
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1000; lp.Q.value=0.4;
+    const hp = ctx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=300;
+    const g = ctx.createGain(); g.gain.value=0.45;
+    n.connect(hp).connect(lp).connect(g).connect(out);
+    n.start();
+    return ()=>{ n.stop(); };
+  },
+  fire(out){
+    const n = noiseSource();
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=380;
+    const g = ctx.createGain(); g.gain.value=0.5;
+    n.connect(lp).connect(g).connect(out);
+    n.start();
+    let alive = true;
+    (function crackle(){
+      if(!alive) return;
+      if(!paused){
+        const b = noiseSource(); b.loop=false;
+        const bp = ctx.createBiquadFilter(); bp.type="bandpass";
+        bp.frequency.value = 1800 + Math.random()*2500; bp.Q.value=2.5;
+        const cg = ctx.createGain();
+        const t = ctx.currentTime;
+        cg.gain.setValueAtTime(0.0001,t);
+        cg.gain.exponentialRampToValueAtTime(0.5+Math.random()*0.5, t+0.006);
+        cg.gain.exponentialRampToValueAtTime(0.0001, t+0.05+Math.random()*0.06);
+        b.connect(bp).connect(cg).connect(out);
+        b.start(t); b.stop(t+0.15);
+      }
+      setTimeout(crackle, 60 + Math.random()*380);
+    })();
+    return ()=>{ alive=false; n.stop(); };
+  },
+  birds(out){
+    let alive = true;
+    (function song(){
+      if(!alive) return;
+      if(!paused){
+        const notes = 2 + Math.floor(Math.random()*3);
+        let t = ctx.currentTime + 0.05;
+        for(let i=0;i<notes;i++){
+          const o = ctx.createOscillator(); o.type="sine";
+          const f0 = 2400 + Math.random()*1600;
+          o.frequency.setValueAtTime(f0, t);
+          o.frequency.exponentialRampToValueAtTime(f0*(1.25+Math.random()*0.4), t+0.06);
+          o.frequency.exponentialRampToValueAtTime(f0*0.9, t+0.12);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001,t);
+          g.gain.exponentialRampToValueAtTime(0.35, t+0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t+0.13);
+          o.connect(g).connect(out);
+          o.start(t); o.stop(t+0.16);
+          t += 0.14 + Math.random()*0.12;
+        }
+      }
+      setTimeout(song, 1200 + Math.random()*3500);
+    })();
+    return ()=>{ alive=false; };
+  },
+  wind(out){
+    const n = noiseSource();
+    const bp = ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=480; bp.Q.value=0.8;
+    const g = ctx.createGain(); g.gain.value=0.4;
+    const lfo1 = ctx.createOscillator(); lfo1.frequency.value=0.11;
+    const l1g = ctx.createGain(); l1g.gain.value=260;
+    lfo1.connect(l1g).connect(bp.frequency);
+    const lfo2 = ctx.createOscillator(); lfo2.frequency.value=0.07;
+    const l2g = ctx.createGain(); l2g.gain.value=0.18;
+    lfo2.connect(l2g).connect(g.gain);
+    n.connect(bp).connect(g).connect(out);
+    n.start(); lfo1.start(); lfo2.start();
+    return ()=>{ n.stop(); lfo1.stop(); lfo2.stop(); };
+  },
+  waves(out){
+    const n = noiseSource();
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=650;
+    const g = ctx.createGain(); g.gain.value=0.32;
+    const lfo = ctx.createOscillator(); lfo.frequency.value=0.085;
+    const lg = ctx.createGain(); lg.gain.value=0.26;
+    lfo.connect(lg).connect(g.gain);
+    n.connect(lp).connect(g).connect(out);
+    n.start(); lfo.start();
+    return ()=>{ n.stop(); lfo.stop(); };
+  },
+  chimes(out){
+    const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+    let alive = true;
+    (function ding(){
+      if(!alive) return;
+      if(!paused){
+        const f = scale[Math.floor(Math.random()*scale.length)];
+        const t = ctx.currentTime + 0.02;
+        const o1 = ctx.createOscillator(); o1.type="sine"; o1.frequency.value=f;
+        const o2 = ctx.createOscillator(); o2.type="sine"; o2.frequency.value=f*2.756;
+        const g1 = ctx.createGain(), g2 = ctx.createGain();
+        g1.gain.setValueAtTime(0.0001,t);
+        g1.gain.exponentialRampToValueAtTime(0.3, t+0.01);
+        g1.gain.exponentialRampToValueAtTime(0.0001, t+2.2);
+        g2.gain.setValueAtTime(0.0001,t);
+        g2.gain.exponentialRampToValueAtTime(0.08, t+0.01);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t+0.9);
+        o1.connect(g1).connect(out); o2.connect(g2).connect(out);
+        o1.start(t); o1.stop(t+2.3); o2.start(t); o2.stop(t+1);
+      }
+      setTimeout(ding, 1800 + Math.random()*4200);
+    })();
+    return ()=>{ alive=false; };
+  },
+  drone(out){
+    const o1 = ctx.createOscillator(); o1.type="triangle"; o1.frequency.value=110;
+    const o2 = ctx.createOscillator(); o2.type="triangle"; o2.frequency.value=110.6;
+    const o3 = ctx.createOscillator(); o3.type="sine"; o3.frequency.value=165;
+    const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=320;
+    const g = ctx.createGain(); g.gain.value=0.22;
+    o1.connect(lp); o2.connect(lp); o3.connect(lp);
+    lp.connect(g).connect(out);
+    o1.start(); o2.start(); o3.start();
+    return ()=>{ o1.stop(); o2.stop(); o3.stop(); };
+  },
+};
+
+/* ============ stage ============ */
+
+const stage  = document.getElementById("stage");
+const beams  = document.getElementById("beams");
+const halo   = document.getElementById("halo");
+const headEl = document.getElementById("head");
+const empty  = document.getElementById("empty");
+const hintEl = document.getElementById("hint");
+const orbs   = new Set();
+const UNITS  = 4;
+const HEAD_R = 44;
+const SVGNS  = "http://www.w3.org/2000/svg";
+
+function stageCenter(){
+  const r = stage.getBoundingClientRect();
+  return {cx:r.width/2, cy:r.height/2, R:Math.min(r.width,r.height)/2 - 42};
+}
+
+function setPannerPos(panner, dx, dy, R){
+  const x = (dx / R) * UNITS;
+  const z = (dy / R) * UNITS;
+  const t = ctx.currentTime;
+  if(panner.positionX){
+    panner.positionX.setTargetAtTime(x, t, 0.03);
+    panner.positionY.setTargetAtTime(0, t, 0.03);
+    panner.positionZ.setTargetAtTime(z, t, 0.03);
+  } else {
+    panner.setPosition(x, 0, z);
+  }
+}
+
+function addOrb(id){
+  ensureCtx();
+  const def = SOUNDS[id];
+
+  const panner = ctx.createPanner();
+  panner.panningModel = "HRTF";
+  panner.distanceModel = "inverse";
+  panner.refDistance = 1;
+  panner.rolloffFactor = 1.15;
+
+  const out = ctx.createGain(); out.gain.value = 1;
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  out.connect(analyser);
+  out.connect(panner).connect(master);
+  const stop = GEN[id](out);
+
+  const el = document.createElement("div");
+  el.className = "orb";
+  el.style.setProperty("--c", def.color);
+  el.innerHTML =
+    `<div class="ripples"><i></i><i></i></div>` +
+    `<div class="core"></div>` +
+    `<svg viewBox="0 0 24 24">${ICONS[id]}</svg>`;
+  stage.appendChild(el);
+
+  const beam = document.createElementNS(SVGNS,"line");
+  beam.setAttribute("stroke", `rgb(${def.color})`);
+  beam.setAttribute("stroke-opacity","0");
+  beams.appendChild(beam);
+
+  const {cx, cy, R} = stageCenter();
+  const ang = Math.random()*Math.PI*2;
+  const orb = {
+    el, panner, stop, out, beam, analyser,
+    buf:new Uint8Array(analyser.fftSize), amp:0,
+    x: cx + Math.cos(ang)*R*0.55,
+    y: cy + Math.sin(ang)*R*0.55,
+    orbit:false, orbAng:0, orbR:0, orbSpeed:0, path:null,
   };
+  place(orb);
+  orbs.add(orb);
+  empty.style.opacity = 0;
 
-  if (!data.avdelning || !data.maskin) {
-    alert("Vänligen fyll i avdelning och maskin!");
+  /* interactions: drag, double-tap remove, long-press orbit */
+  let lastTap = 0, moved = false, lpTimer = null;
+  el.addEventListener("pointerdown", e=>{
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    moved = false;
+    if(orb.orbit) stopOrbit(orb); // grab an orbiting orb to catch it
+    const sx = e.clientX, sy = e.clientY;
+    const ox = orb.x - sx, oy = orb.y - sy;
+
+    lpTimer = setTimeout(()=>{ if(!moved) startOrbit(orb); }, 550);
+
+    const onMove = ev=>{
+      if(!moved && Math.hypot(ev.clientX-sx, ev.clientY-sy) < 8) return;
+      moved = true;
+      clearTimeout(lpTimer);
+      if(orb.orbit) stopOrbit(orb);
+      const rect = stage.getBoundingClientRect();
+      orb.x = Math.min(Math.max(ev.clientX + ox, 10), rect.width - 10);
+      orb.y = Math.min(Math.max(ev.clientY + oy, 10), rect.height - 10);
+      place(orb);
+    };
+    const onUp = ()=>{
+      clearTimeout(lpTimer);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      if(!moved && !orb.orbit){
+        const now = Date.now();
+        if(now - lastTap < 320) removeOrb(orb);
+        lastTap = now;
+      }
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+  });
+}
+
+/* ---- orbit ---- */
+function startOrbit(orb){
+  const {cx, cy} = stageCenter();
+  orb.orbR = Math.max(70, Math.hypot(orb.x-cx, orb.y-cy));
+  orb.orbAng = Math.atan2(orb.y-cy, orb.x-cx);
+  orb.orbSpeed = (Math.random() < 0.5 ? 1 : -1) * 0.35; // rad/s
+  orb.orbit = true;
+  orb.el.classList.add("engage");
+  setTimeout(()=>orb.el.classList.remove("engage"), 450);
+  const p = document.createElementNS(SVGNS,"circle");
+  p.setAttribute("class","orbit");
+  p.setAttribute("stroke", `rgba(${orb.el.style.getPropertyValue("--c")},.30)`);
+  beams.appendChild(p);
+  orb.path = p;
+  updateOrbitPath(orb);
+}
+function stopOrbit(orb){
+  orb.orbit = false;
+  if(orb.path){ orb.path.remove(); orb.path = null; }
+}
+function updateOrbitPath(orb){
+  if(!orb.path) return;
+  const {cx, cy} = stageCenter();
+  orb.path.setAttribute("cx", cx);
+  orb.path.setAttribute("cy", cy);
+  orb.path.setAttribute("r", orb.orbR);
+}
+
+function place(orb){
+  orb.el.style.left = orb.x + "px";
+  orb.el.style.top  = orb.y + "px";
+  const {cx, cy, R} = stageCenter();
+  setPannerPos(orb.panner, orb.x - cx, orb.y - cy, R);
+  const dx = cx - orb.x, dy = cy - orb.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx/len, uy = dy/len;
+  orb.beam.setAttribute("x1", orb.x + ux*32);
+  orb.beam.setAttribute("y1", orb.y + uy*32);
+  orb.beam.setAttribute("x2", cx - ux*HEAD_R);
+  orb.beam.setAttribute("y2", cy - uy*HEAD_R);
+}
+
+function removeOrb(orb){
+  const t = ctx.currentTime;
+  orb.out.gain.setTargetAtTime(0.0001, t, 0.06);
+  stopOrbit(orb);
+  orb.el.style.transition = "transform .25s, opacity .25s";
+  orb.el.style.transform = "scale(.35)";
+  orb.el.style.opacity = "0";
+  orb.beam.setAttribute("stroke-opacity","0");
+  setTimeout(()=>{
+    try{orb.stop();}catch(e){}
+    orb.el.remove(); orb.beam.remove();
+  }, 300);
+  orbs.delete(orb);
+  if(orbs.size === 0) empty.style.opacity = 1;
+}
+
+/* ============ animation loop ============ */
+let lastT = 0;
+function loop(ts){
+  const dt = lastT ? Math.min(0.05, (ts-lastT)/1000) : 0;
+  lastT = ts;
+  let sum = 0;
+  const {cx, cy} = stageCenter();
+  orbs.forEach(o=>{
+    if(o.orbit && !paused){
+      o.orbAng += o.orbSpeed * dt;
+      o.x = cx + Math.cos(o.orbAng) * o.orbR;
+      o.y = cy + Math.sin(o.orbAng) * o.orbR;
+      place(o);
+    }
+    o.analyser.getByteTimeDomainData(o.buf);
+    let m = 0;
+    for(let i=0;i<o.buf.length;i+=4){
+      const v = Math.abs(o.buf[i]-128)/128;
+      if(v>m) m=v;
+    }
+    o.amp += (Math.min(1, m*1.6) - o.amp) * 0.22;
+    o.el.style.setProperty("--amp", o.amp.toFixed(3));
+    o.beam.setAttribute("stroke-opacity", (0.05 + o.amp*0.38).toFixed(3));
+    sum += o.amp;
+  });
+  halo.style.setProperty("--hamp", Math.min(1, sum*0.8).toFixed(3));
+  requestAnimationFrame(loop);
+}
+
+/* ============ gyro ============ */
+let gyroOn = false, gyroBase = null;
+
+function headingFromEvent(e){
+  if(typeof e.webkitCompassHeading === "number") return e.webkitCompassHeading; // iOS, cw
+  if(typeof e.alpha === "number") return 360 - e.alpha; // convert ccw → cw
+  return null;
+}
+
+function onOrient(e){
+  const h = headingFromEvent(e);
+  if(h === null) return;
+  if(gyroBase === null) gyroBase = h;
+  let deg = h - gyroBase;
+  const rad = deg * Math.PI/180;
+  headEl.style.setProperty("--rot", deg + "deg");
+  if(!ctx) return;
+  const fx = Math.sin(rad), fz = -Math.cos(rad);
+  const L = ctx.listener, t = ctx.currentTime;
+  if(L.forwardX){
+    L.forwardX.setTargetAtTime(fx, t, 0.05);
+    L.forwardZ.setTargetAtTime(fz, t, 0.05);
+    L.upY.setTargetAtTime(1, t, 0.05);
+  } else {
+    L.setOrientation(fx, 0, fz, 0, 1, 0);
+  }
+}
+
+async function toggleGyro(){
+  ensureCtx();
+  if(gyroOn){
+    removeEventListener("deviceorientation", onOrient);
+    gyroOn = false; gyroBase = null;
+    headEl.style.setProperty("--rot","0deg");
+    if(ctx){
+      const L = ctx.listener, t = ctx.currentTime;
+      if(L.forwardX){ L.forwardX.setTargetAtTime(0,t,.05); L.forwardZ.setTargetAtTime(-1,t,.05); }
+      else L.setOrientation(0,0,-1,0,1,0);
+    }
+    gyroBtn.classList.remove("on");
+    hintEl.textContent = "🎧 headphones required";
     return;
   }
-
-  try {
-    const response = await fetch(
-      "https://script.google.com/macros/s/AKfycbwpU0-X7o5J5ADxAp1pxyYRaRiSRpycHPEC5X1YzLSMopimsnbx_OIDsrnKpCONR3G8/exec",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      }
-    );
-
-    if (!response.ok) throw new Error("HTTP error " + response.status);
-
-    alert("✅ Rapport skickad!");
-    clearForm();
-
-  } catch (err) {
-    console.error("Fel vid skickande:", err);
-    alert("❌ Fel vid skickande: " + err.message);
+  try{
+    if(typeof DeviceOrientationEvent !== "undefined" &&
+       typeof DeviceOrientationEvent.requestPermission === "function"){
+      const res = await DeviceOrientationEvent.requestPermission();
+      if(res !== "granted") throw new Error("denied");
+    }
+    addEventListener("deviceorientation", onOrient);
+    gyroOn = true; gyroBase = null;
+    gyroBtn.classList.add("on");
+    hintEl.textContent = "turn your phone to turn the head";
+  }catch(err){
+    hintEl.textContent = "no motion sensor available";
+    setTimeout(()=>{ hintEl.textContent = "🎧 headphones required"; }, 2500);
   }
 }
 
-function clearForm() {
-  document.getElementById("datum").valueAsDate = new Date();
-  document.getElementById("avdelning").value = "";
-  document.getElementById("maskin").value = "";
-  document.getElementById("orsak").value = "";
-  document.getElementById("atgard").value = "";
+/* ============ dial ============ */
+function drawDial(){
+  const svg = document.getElementById("dial");
+  const r = stage.getBoundingClientRect();
+  const cx = r.width/2, cy = r.height/2, R = Math.min(r.width,r.height)/2 - 42;
+  let s = [0.34, 0.67, 1].map(k=>`<circle cx="${cx}" cy="${cy}" r="${R*k}"/>`).join("");
+  for(let a=0; a<360; a+=15){
+    const rad = a*Math.PI/180;
+    const cardinal = a % 90 === 0;
+    const l = cardinal ? 9 : 4.5;
+    const x1 = cx + Math.cos(rad)*R,      y1 = cy + Math.sin(rad)*R;
+    const x2 = cx + Math.cos(rad)*(R-l),  y2 = cy + Math.sin(rad)*(R-l);
+    s += `<line class="tick${cardinal?' cardinal':''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
+  s += `<text x="${cx}" y="${cy-R-9}">FRONT</text>`;
+  s += `<text x="${cx}" y="${cy+R+17}">BACK</text>`;
+  svg.innerHTML = s;
 }
-</script>
+drawDial();
 
+addEventListener("resize", ()=>{
+  drawDial();
+  if(!ctx) return;
+  orbs.forEach(o=>{ place(o); updateOrbitPath(o); });
+});
+
+/* ============ controls ============ */
+const tray = document.getElementById("tray");
+for(const [id, def] of Object.entries(SOUNDS)){
+  const b = document.createElement("button");
+  b.className = "chip";
+  b.style.setProperty("--c", def.color);
+  b.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[id]}</svg>${def.label}`;
+  b.addEventListener("click", ()=>addOrb(id));
+  tray.appendChild(b);
+}
+
+const spaceSeg = document.getElementById("spaceSeg");
+for(const name of Object.keys(SPACES)){
+  const b = document.createElement("button");
+  b.dataset.name = name;
+  b.textContent = name;
+  if(name === "Dry") b.classList.add("on");
+  b.addEventListener("click", ()=>setSpace(name));
+  spaceSeg.appendChild(b);
+}
+
+const gyroBtn = document.getElementById("gyroBtn");
+gyroBtn.addEventListener("click", toggleGyro);
+
+const pauseBtn = document.getElementById("pauseBtn");
+const pauseIcon = document.getElementById("pauseIcon");
+pauseBtn.addEventListener("click", ()=>{
+  if(!ctx) return;
+  paused = !paused;
+  paused ? ctx.suspend() : ctx.resume();
+  pauseIcon.innerHTML = paused
+    ? '<path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor"/>'
+    : '<path d="M9 6v12M15 6v12" stroke-width="2.4"/>';
+});
+</script>
 </body>
 </html>
