@@ -288,29 +288,10 @@
     }
     #empty{width:min(250px,52vw);transform:translate(-50%,68px)}
   }
-
-  /* while gyro is on, ignore physical rotation — reflowing mid-tracking
-     would fight the whole point of turning your body/phone freely */
-  @media (orientation:landscape) and (max-height:620px){
-    body.gyro-lock{flex-direction:column}
-    body.gyro-lock header{
-      position:static;top:auto;left:auto;right:auto;padding:18px 22px 6px;
-    }
-    body.gyro-lock #stage{order:0;flex:1}
-    body.gyro-lock #bottom{
-      order:1;flex:0 0 auto;flex-direction:column;
-      border-top:1px solid rgba(255,255,255,.06);border-left:none;
-      padding-bottom:calc(18px + env(safe-area-inset-bottom));
-    }
-    body.gyro-lock #space{flex-direction:row;align-items:center;gap:10px;padding:12px 18px 0}
-    body.gyro-lock .seg{flex-direction:row}
-    body.gyro-lock #tray{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:12px 18px 16px;gap:8px}
-    body.gyro-lock .chip{flex-direction:column;padding:11px 10px 9px;min-width:66px}
-    body.gyro-lock #empty{width:min(280px,78vw);transform:translate(-50%,76px)}
-  }
 </style>
 </head>
 <body>
+<audio id="bgSink" playsinline style="display:none"></audio>
 
 <header>
   <div class="brand">
@@ -318,9 +299,6 @@
     <span class="hint" id="hint">🎧 headphones required</span>
   </div>
   <div class="hbtns">
-    <button class="hbtn" id="gyroBtn" aria-label="Gyro mode">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15 9l-1.6 4.4L9 15l1.6-4.4z"/></svg>
-    </button>
     <button class="hbtn" id="pauseBtn" aria-label="Pause all">
       <svg viewBox="0 0 24 24" id="pauseIcon"><path d="M9 6v12M15 6v12" stroke-width="2.4"/></svg>
     </button>
@@ -409,6 +387,7 @@ const SOUNDS = {
 
 let ctx = null, master = null, noiseBuf = null, paused = false;
 let convolver = null, wetGain = null, dryGain = null, preDelay = null, damp = null, sendBus = null;
+let bgSink = null;
 
 function ensureCtx(){
   if(ctx){ if(ctx.state === "suspended" && !paused) ctx.resume(); return; }
@@ -421,10 +400,29 @@ function ensureCtx(){
   preDelay = ctx.createDelay(0.2); preDelay.delayTime.value = 0;
   damp = ctx.createBiquadFilter(); damp.type = "lowpass"; damp.frequency.value = 20000;
   sendBus = ctx.createGain(); sendBus.gain.value = 1; // extra per-orb distance sends join here
-  master.connect(dryGain).connect(ctx.destination);
+
+  // route through a real <audio> element instead of straight to ctx.destination —
+  // iOS keeps a playing <audio>/<video> element's session alive when the screen
+  // locks or the app backgrounds, whereas a bare AudioContext gets suspended
+  const streamDest = ctx.createMediaStreamDestination();
+  master.connect(dryGain).connect(streamDest);
   master.connect(preDelay);
   sendBus.connect(preDelay);
-  preDelay.connect(convolver).connect(damp).connect(wetGain).connect(ctx.destination);
+  preDelay.connect(convolver).connect(damp).connect(wetGain).connect(streamDest);
+
+  bgSink = document.getElementById("bgSink");
+  bgSink.srcObject = streamDest.stream;
+  bgSink.play().catch(()=>{});
+
+  if("mediaSession" in navigator){
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: "Ljudrum",
+      artist: "Spatial soundscape",
+    });
+    navigator.mediaSession.setActionHandler("play", ()=>{ if(paused) togglePause(); });
+    navigator.mediaSession.setActionHandler("pause", ()=>{ if(!paused) togglePause(); });
+    navigator.mediaSession.playbackState = "playing";
+  }
 
   const len = ctx.sampleRate * 2;
   noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -1035,67 +1033,6 @@ function loop(ts){
   requestAnimationFrame(loop);
 }
 
-/* ============ gyro ============ */
-let gyroOn = false, gyroBase = null;
-
-function headingFromEvent(e){
-  if(typeof e.webkitCompassHeading === "number") return e.webkitCompassHeading; // iOS, cw
-  if(typeof e.alpha === "number") return 360 - e.alpha; // convert ccw → cw
-  return null;
-}
-
-function onOrient(e){
-  const h = headingFromEvent(e);
-  if(h === null) return;
-  if(gyroBase === null) gyroBase = h;
-  let deg = h - gyroBase;
-  const rad = deg * Math.PI/180;
-  headEl.style.setProperty("--rot", deg + "deg");
-  if(!ctx) return;
-  const fx = Math.sin(rad), fz = -Math.cos(rad);
-  const L = ctx.listener, t = ctx.currentTime;
-  if(L.forwardX){
-    L.forwardX.setTargetAtTime(fx, t, 0.05);
-    L.forwardZ.setTargetAtTime(fz, t, 0.05);
-    L.upY.setTargetAtTime(1, t, 0.05);
-  } else {
-    L.setOrientation(fx, 0, fz, 0, 1, 0);
-  }
-}
-
-async function toggleGyro(){
-  ensureCtx();
-  if(gyroOn){
-    removeEventListener("deviceorientation", onOrient);
-    gyroOn = false; gyroBase = null;
-    headEl.style.setProperty("--rot","0deg");
-    document.body.classList.remove("gyro-lock");
-    if(ctx){
-      const L = ctx.listener, t = ctx.currentTime;
-      if(L.forwardX){ L.forwardX.setTargetAtTime(0,t,.05); L.forwardZ.setTargetAtTime(-1,t,.05); }
-      else L.setOrientation(0,0,-1,0,1,0);
-    }
-    gyroBtn.classList.remove("on");
-    hintEl.textContent = "🎧 headphones required";
-    return;
-  }
-  try{
-    if(typeof DeviceOrientationEvent !== "undefined" &&
-       typeof DeviceOrientationEvent.requestPermission === "function"){
-      const res = await DeviceOrientationEvent.requestPermission();
-      if(res !== "granted") throw new Error("denied");
-    }
-    addEventListener("deviceorientation", onOrient);
-    gyroOn = true; gyroBase = null;
-    document.body.classList.add("gyro-lock");
-    gyroBtn.classList.add("on");
-    hintEl.textContent = "turn your phone to turn the head";
-  }catch(err){
-    hintEl.textContent = "no motion sensor available";
-    setTimeout(()=>{ hintEl.textContent = "🎧 headphones required"; }, 2500);
-  }
-}
-
 /* ============ orientation ============ */
 /* Works on Android/Chromium in standalone. iOS has no Fullscreen API on
    iPhone, so lock() is unavailable there — the landscape CSS covers it. */
@@ -1157,19 +1094,20 @@ for(const name of Object.keys(SPACES)){
   spaceSeg.appendChild(b);
 }
 
-const gyroBtn = document.getElementById("gyroBtn");
-gyroBtn.addEventListener("click", toggleGyro);
-
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseIcon = document.getElementById("pauseIcon");
-pauseBtn.addEventListener("click", ()=>{
+function togglePause(){
   if(!ctx) return;
   paused = !paused;
   paused ? ctx.suspend() : ctx.resume();
   pauseIcon.innerHTML = paused
     ? '<path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor"/>'
     : '<path d="M9 6v12M15 6v12" stroke-width="2.4"/>';
-});
+  if("mediaSession" in navigator){
+    navigator.mediaSession.playbackState = paused ? "paused" : "playing";
+  }
+}
+pauseBtn.addEventListener("click", togglePause);
 </script>
 </body>
 </html>
