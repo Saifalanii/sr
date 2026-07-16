@@ -16,9 +16,17 @@
     --line-strong:rgba(160,190,255,.22);
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden}
+  html{
+    height:100%;
+    background:var(--bg);
+  }
   body{
-    background:
+    position:fixed;
+    top:0;left:0;right:0;bottom:0;
+    overflow:hidden;
+    overscroll-behavior:none;
+    background-color:var(--bg);
+    background-image:
       radial-gradient(90% 55% at 50% 0%, rgba(90,120,200,.10), transparent 70%),
       radial-gradient(130% 100% at 50% 45%, #0F1522 0%, var(--bg) 62%);
     color:var(--ink);
@@ -91,9 +99,15 @@
   #empty{
     position:absolute;left:50%;top:50%;
     transform:translate(-50%,76px);
-    font-size:13px;line-height:1.5;color:var(--ink-dim);
+    width:min(280px, 78vw);
+    font-size:13px;line-height:1.55;color:var(--ink-dim);
     text-align:center;pointer-events:none;
+    text-wrap:balance;
     transition:opacity .5s;
+  }
+  #empty .gestures{
+    display:block;margin-top:8px;
+    font-size:11px;opacity:.62;letter-spacing:.01em;
   }
 
   /* ---------- orbs ---------- */
@@ -238,7 +252,7 @@
     </defs>
   </svg>
 
-  <div id="empty">Tap a sound below,<br>drag it where you want to hear it.<br><span style="font-size:11px;opacity:.7">Hold an orb to set it orbiting · double-tap to remove</span></div>
+  <div id="empty">Tap a sound below,<br>drag it where you want to hear it.<span class="gestures">Hold to orbit · double-tap to remove</span></div>
 </div>
 
 <div id="bottom">
@@ -754,11 +768,16 @@ function drawDial(){
 }
 drawDial();
 
-addEventListener("resize", ()=>{
+function relayout(){
   drawDial();
   if(!ctx) return;
   orbs.forEach(o=>{ place(o); updateOrbitPath(o); });
-});
+}
+addEventListener("resize", relayout);
+addEventListener("orientationchange", ()=>setTimeout(relayout, 250));
+if(window.visualViewport){
+  visualViewport.addEventListener("resize", relayout);
+}
 
 /* ============ controls ============ */
 const tray = document.getElementById("tray");
