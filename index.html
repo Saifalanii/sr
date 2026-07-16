@@ -1099,7 +1099,10 @@ const pauseIcon = document.getElementById("pauseIcon");
 function togglePause(){
   if(!ctx) return;
   paused = !paused;
-  paused ? ctx.suspend() : ctx.resume();
+  const t = ctx.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setValueAtTime(master.gain.value, t);
+  master.gain.linearRampToValueAtTime(paused ? 0.0001 : 0.9, t + 0.08);
   pauseIcon.innerHTML = paused
     ? '<path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor"/>'
     : '<path d="M9 6v12M15 6v12" stroke-width="2.4"/>';
